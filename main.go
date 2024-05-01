@@ -60,23 +60,26 @@ func streamTwitterData(dataChan chan<- TweetData) error {
 	return nil
 }
 
-func main() {
+func logTweetData(dataChan <-chan TweetData) {
+	for tweet := range dataChan {
+		fmt.Printf("Tweet: %+v\n", tweet)
+	}
+}
 
+func main() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	dataChan := make(chan TweetData)
+	dataChan := make(chan TweetData, 100)
 
-	go func() {
-		err := streamTwitterData(dataChan)
-		if err != nil {
-			log.Println(err)
-		}
-	}()
+	// Start the logging goroutine first
+	go logTweetData(dataChan)
 
-	for tweet := range dataChan {
-		fmt.Printf("Tweet: %+v\n", tweet)
+	// Then start streaming Twitter data
+	err = streamTwitterData(dataChan)
+	if err != nil {
+		log.Println(err)
 	}
 }
