@@ -1,5 +1,0 @@
-The Twitter filtered streaming API is designed to deliver data incrementally, which means it streams Tweet events as they happen. The API does not typically send multiple tweets in a single response body; instead, it sends each tweet individually as soon as it becomes available. This is akin to downloading an infinitely long file over HTTP, where the server sends data (in this case, tweets) through the connection as long as it is open1.
-
-However, it’s important to note that the streaming endpoints will send data as quickly as it becomes available, which can result in high volumes. If the Twitter server cannot write new data to the stream right away (for example, if your client is not reading fast enough), it will buffer the content on its end to allow your client to catch up. But if this buffer gets full, a forced disconnect will be initiated, and the buffered tweets will be dropped and not resent1.
-
-Therefore, when designing your client, you should ensure that it can handle low data volumes by maintaining the streaming connection and detecting tweet objects and keep

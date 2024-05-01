@@ -2,12 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 
+	"cloud.google.com/go/pubsub"
 	"github.com/joho/godotenv"
 )
 
@@ -60,9 +61,36 @@ func streamTwitterData(dataChan chan<- TweetData) error {
 	return nil
 }
 
-func logTweetData(dataChan <-chan TweetData) {
+func PublishTweetData(dataChan <-chan TweetData) {
+	PROJECT_ID := os.Getenv("PROJECT_ID")
+	TOPIC_ID := os.Getenv("TOPIC_ID")
+
+	// Setup publisher
+	ctx := context.Background()
+	client, err := pubsub.NewClient(ctx, PROJECT_ID)
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	topic := client.Topic(TOPIC_ID)
+	defer topic.Stop()
+
+	// Publish tweets from the channel
 	for tweet := range dataChan {
-		fmt.Printf("Tweet: %+v\n", tweet)
+		tweetBytes := []byte(tweet.Data.Text)
+
+		result := topic.Publish(ctx, &pubsub.Message{
+			Data: tweetBytes,
+		})
+
+		// Block until the result is returned and a server-generated
+		// ID is returned for the published message.
+		id, err := result.Get(ctx)
+		if err != nil {
+			log.Fatalf("Failed to publish: %v", err)
+		}
+		log.Printf("Published a message; msg ID: %v\n", id)
 	}
 }
 
@@ -75,7 +103,7 @@ func main() {
 	dataChan := make(chan TweetData, 100)
 
 	// Start the logging goroutine first
-	go logTweetData(dataChan)
+	go PublishTweetData(dataChan)
 
 	// Then start streaming Twitter data
 	err = streamTwitterData(dataChan)
