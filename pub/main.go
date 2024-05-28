@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -22,7 +23,10 @@ type TweetData struct {
 
 func streamTwitterData(dataChan chan<- TweetData) error {
 	BEARER_TOKEN := os.Getenv("BEARER_TOKEN")
-	url := "https://api.twitter.com/2/tweets/search/stream"
+	// url := "https://api.twitter.com/2/tweets/search/stream"
+	url := `https://api.twitter.com/2/tweets/search/stream?expansions=author_id,in_reply_to_user_id,geo.place_id,referenced_tweets.id,entities.mentions.username&place.fields=country,full_name,name&tweet.fields=author_id,created_at,geo,id,in_reply_to_user_id,lang,text&user.fields=description,name,username,location
+	`
+
 	method := "GET"
 
 	client := &http.Client{}
@@ -94,20 +98,71 @@ func PublishTweetData(dataChan <-chan TweetData) {
 	}
 }
 
+func saveTwitterData() error {
+	BEARER_TOKEN := os.Getenv("BEARER_TOKEN")
+	url := "https://api.twitter.com/2/tweets/search/stream?expansions=author_id,in_reply_to_user_id,geo.place_id,referenced_tweets.id,entities.mentions.username&place.fields=country,full_name,name&tweet.fields=author_id,created_at,geo,id,in_reply_to_user_id,lang,text&user.fields=description,name,username,location"
+	method := "GET"
+
+	client := &http.Client{}
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	req.Header.Add("Authorization", "Bearer "+BEARER_TOKEN)
+
+	res, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer res.Body.Close()
+
+	file, err := os.Create("twitter_data.json")
+	if err != nil {
+		log.Println(err)
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+
+	reader := bufio.NewReader(res.Body)
+	for {
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break // End of stream
+			}
+			log.Println(err)
+			break // Exit the loop on error
+		}
+
+		_, err = writer.Write(line)
+		if err != nil {
+			log.Println(err)
+			continue // Skip on write error
+		}
+		writer.Flush() // Flush after each line to ensure all data is written
+	}
+	return nil
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatal("Error loading .env file")
 	}
 
-	dataChan := make(chan TweetData, 100)
+	saveTwitterData()
+	// dataChan := make(chan TweetData, 100)
 
-	// Start the logging goroutine first
-	go PublishTweetData(dataChan)
+	// // Start the logging goroutine first
+	// go PublishTweetData(dataChan)
 
-	// Then start streaming Twitter data
-	err = streamTwitterData(dataChan)
-	if err != nil {
-		log.Println(err)
-	}
+	// // Then start streaming Twitter data
+	// err = streamTwitterData(dataChan)
+	// if err != nil {
+	// 	log.Println(err)
+	// }
 }
